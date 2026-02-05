@@ -152,7 +152,7 @@ public class Server {
             // Prevent duplicate pins at the same coordinate
             for (Pin existing : pins) {
                 if (existing.x == px && existing.y == py) {
-                    out.println("ERROR COMPLETE_OVERLAP - Note overlaps existing note entirely");
+                    out.println("ERROR COMPLETE_OVERLAP - Pin overlaps existing pin entirely");
                     return;
                 }
             }
