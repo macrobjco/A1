@@ -14,6 +14,7 @@ public class Client extends JFrame {
     private PrintWriter out; 
     private BufferedReader in;
 
+    // Constructor: Initialize GUI window, set up controls and board display
     public Client() {
         super("CP372 Bulletin Board - Bryce & Caleb");
         setupUI();
@@ -21,6 +22,7 @@ public class Client extends JFrame {
         pack(); setVisible(true);
     }
 
+    // Setup UI: Build control panels (connect, post, pin, search, clear, shake) and board display
     private void setupUI() {
         setLayout(new BorderLayout());
         JPanel side = new JPanel();
@@ -80,6 +82,7 @@ public class Client extends JFrame {
         add(new JScrollPane(log), BorderLayout.SOUTH);
     }
 
+    // Connect to server: Establish socket, send initial SHAKE command, and load board
     private void connect() {
         try {
             Socket s = new Socket(ipF.getText(), Integer.parseInt(portF.getText()));
@@ -92,6 +95,7 @@ public class Client extends JFrame {
         } catch (Exception e) { log.append("Connection Failed\n"); }
     }
 
+    // Send command: Send command to server, log response, and refresh board
     private void send(String cmd) {
         if (out == null) return;
         out.println(cmd);
@@ -102,6 +106,7 @@ public class Client extends JFrame {
         } catch (Exception e) {}
     }
 
+    // Refresh board: Request notes and pins from server and update board display
     private void refresh(String getCmd, boolean showInLog) {
         if (out == null) return;
         out.println(getCmd);
@@ -148,14 +153,18 @@ public class Client extends JFrame {
         } catch (Exception e) {}
     }
 
+    // Inner class: Renders the bulletin board with grid, notes, and pins
     class BoardPanel extends JPanel {
         private java.util.List<NoteInfo> notes = new ArrayList<>();
         private java.util.List<Point> pins = new ArrayList<>();
+        // Constructor: Set panel size and white background
         public BoardPanel() { setPreferredSize(new Dimension(850, 650)); setBackground(Color.WHITE); }
+        // Update board: Store notes and pins list, trigger repaint
         public void updateBoard(java.util.List<NoteInfo> n, java.util.List<Point> p) { 
             this.notes = n; this.pins = p; repaint(); 
         }
         
+        // Paint component: Draw grid, board border, colored notes with text, and red pin markers
         @Override protected void paintComponent(Graphics g) {
             super.paintComponent(g);
             int S = 5; int O = 60; 
@@ -182,6 +191,7 @@ public class Client extends JFrame {
                 g.drawOval(O + p.x * S - 4, O + p.y * S - 4, 8, 8);
             }
         }
+        // Get color: Convert color name string to Color object
         private Color getColor(String c) {
             switch(c.toLowerCase()){
                 case "red": return Color.RED; case "blue": return Color.BLUE;
