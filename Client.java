@@ -5,117 +5,191 @@ import java.net.Socket;
 import java.util.*;
 
 public class Client extends JFrame {
-    private JTextField portField = new JTextField("4554", 4);
-    private JTextField xField = new JTextField("0", 3), yField = new JTextField("0", 3), msgField = new JTextField(15);
-    private JComboBox<String> colorBox = new JComboBox<>(new String[]{"red", "blue", "green", "yellow", "white"});
-    private JTextArea logArea = new JTextArea(8, 40);
-    private BoardPanel boardPanel = new BoardPanel();
-    private PrintWriter out; private BufferedReader in;
+    private JTextField ipF = new JTextField("127.0.0.1", 8), portF = new JTextField("4554", 4);
+    private JTextField xF = new JTextField("0", 3), yF = new JTextField("0", 3), msgF = new JTextField("", 10);
+    private JComboBox<String> colors = new JComboBox<>(new String[]{"red", "blue", "green", "yellow", "white"});
+    private JTextField fCol = new JTextField(5), fX = new JTextField(3), fY = new JTextField(3), fSub = new JTextField(10);
+    private JTextArea log = new JTextArea(8, 45);
+    private BoardPanel board = new BoardPanel();
+    private PrintWriter out; 
+    private BufferedReader in;
 
-    // Constructor: Initialize window, set up UI, and display for Bulletin Board client
     public Client() {
-        super("Bulletin Board");
+        super("CP372 Bulletin Board - Bryce & Caleb");
         setupUI();
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        pack();
-        setVisible(true);
+        pack(); setVisible(true);
     }
 
-    // Setup UI: Build control panels, board display, and log area
     private void setupUI() {
         setLayout(new BorderLayout());
-        JPanel controls = new JPanel();
-        controls.setLayout(new BoxLayout(controls, BoxLayout.Y_AXIS));
+        JPanel side = new JPanel();
+        side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
+        side.setBorder(BorderFactory.createTitledBorder("CP372 A1 Controls"));
 
-        JPanel conn = new JPanel(); conn.add(new JLabel("Port:")); conn.add(portField);
-        JButton connectBtn = new JButton("Connect"); connectBtn.addActionListener(e -> connect());
-        conn.add(connectBtn); controls.add(conn);
-        JPanel post = new JPanel(new GridLayout(0,1));
-        post.setBorder(BorderFactory.createTitledBorder("Post Note"));
-        post.add(new JLabel("X, Y:"));
-        JPanel pos = new JPanel(); pos.add(xField); pos.add(yField); post.add(pos);
-        post.add(new JLabel("Message:")); post.add(msgField); post.add(colorBox);
-        JButton postBtn = new JButton("POST"); postBtn.addActionListener(e -> send("POST " + xField.getText() + " " + yField.getText() + " " + colorBox.getSelectedItem() + " " + msgField.getText()));
-        post.add(postBtn); controls.add(post);
+        JPanel connP = new JPanel();
+        connP.add(new JLabel("Port:")); connP.add(portF);
+        JButton cBtn = new JButton("CONNECT");
+        cBtn.addActionListener(e -> connect());
+        connP.add(cBtn);
+        side.add(connP);
 
-        JButton clearBtn = new JButton("Clear Board"); clearBtn.addActionListener(e -> send("CLEAR"));
-        controls.add(clearBtn);
+        JPanel postArea = new JPanel(new GridLayout(0, 1));
+        postArea.setBorder(BorderFactory.createTitledBorder("Post / Pin"));
+        postArea.add(new JLabel("Pos (X,Y):"));
+        JPanel pIn = new JPanel(); pIn.add(xF); pIn.add(yF); postArea.add(pIn);
+        postArea.add(new JLabel("Message:")); postArea.add(msgF);
+        postArea.add(colors);
+        JButton postB = new JButton("POST NOTE");
+        postB.addActionListener(e -> send("POST " + xF.getText() + " " + yF.getText() + " " + colors.getSelectedItem() + " " + msgF.getText()));
+        postArea.add(postB);
+        
+        JPanel pinRow = new JPanel(new GridLayout(1, 2));
+        JButton pinB = new JButton("PIN"); pinB.addActionListener(e -> send("PIN " + xF.getText() + " " + yF.getText()));
+        JButton unB = new JButton("UNPIN"); unB.addActionListener(e -> send("UNPIN " + xF.getText() + " " + yF.getText()));
+        pinRow.add(pinB); pinRow.add(unB);
+        postArea.add(pinRow);
+        side.add(postArea);
 
-        add(new JScrollPane(boardPanel), BorderLayout.CENTER);
-        add(controls, BorderLayout.EAST);
-        logArea.setBackground(Color.BLACK); logArea.setForeground(Color.GREEN);
-        add(new JScrollPane(logArea), BorderLayout.SOUTH);
+        JPanel getArea = new JPanel(new GridLayout(0, 1));
+        getArea.setBorder(BorderFactory.createTitledBorder("Search Filters"));
+        getArea.add(new JLabel("Color:")); getArea.add(fCol);
+        getArea.add(new JLabel("Contains (X Y):")); 
+        JPanel cIn = new JPanel(); cIn.add(fX); cIn.add(fY); getArea.add(cIn);
+        getArea.add(new JLabel("refersTo:")); getArea.add(fSub);
+        
+        JButton filterBtn = new JButton("RUN FILTERED GET");
+        filterBtn.addActionListener(e -> {
+            StringBuilder cmd = new StringBuilder("GET");
+            if (!fCol.getText().isEmpty()) cmd.append(" color=").append(fCol.getText());
+            if (!fX.getText().isEmpty() && !fY.getText().isEmpty()) 
+                cmd.append(" contains=").append(fX.getText()).append(" ").append(fY.getText());
+            if (!fSub.getText().isEmpty()) cmd.append(" refersTo=").append(fSub.getText());
+            refresh(cmd.toString(), true);
+        });
+        getArea.add(filterBtn);
+        side.add(getArea);
+
+        JButton shakeB = new JButton("SHAKE"); shakeB.addActionListener(e -> send("SHAKE"));
+        JButton clearB = new JButton("CLEAR"); clearB.addActionListener(e -> send("CLEAR"));
+        side.add(shakeB); side.add(clearB);
+
+        add(new JScrollPane(board), BorderLayout.CENTER);
+        add(side, BorderLayout.EAST);
+        log.setEditable(false); log.setBackground(Color.BLACK); log.setForeground(Color.GREEN);
+        add(new JScrollPane(log), BorderLayout.SOUTH);
     }
 
-    // Connect to server: Establish socket connection and fetch initial board state
     private void connect() {
         try {
-            Socket s = new Socket("127.0.0.1", Integer.parseInt(portField.getText()));
+            Socket s = new Socket(ipF.getText(), Integer.parseInt(portF.getText()));
             out = new PrintWriter(s.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(s.getInputStream()));
-            logArea.append("Connected: " + in.readLine() + "\n");
-            refresh();
-        } catch (Exception e) { logArea.append("Connection failed\n"); }
+            log.append("Server: " + in.readLine() + "\n");
+            out.println("SHAKE");
+            log.append("Server: " + in.readLine() + "\n");
+            refresh("GET", false);
+        } catch (Exception e) { log.append("Connection Failed\n"); }
     }
 
-    // Send command: Send command to server, log response, refresh if successful
     private void send(String cmd) {
         if (out == null) return;
         out.println(cmd);
-        try {
+        try { 
             String resp = in.readLine();
-            logArea.append("Server: " + resp + "\n");
-            if (resp != null && resp.startsWith("OK")) refresh();
+            log.append("Server: " + resp + "\n");
+            refresh("GET", false);
         } catch (Exception e) {}
     }
 
-    // Refresh board: Request current notes from server and update display
-    private void refresh() {
+    private void refresh(String getCmd, boolean showInLog) {
         if (out == null) return;
-        out.println("GET");
+        out.println(getCmd);
         try {
             String line = in.readLine();
+            if (showInLog) log.append("Server: " + line + "\n"); 
             if (line == null || !line.startsWith("OK")) return;
+            
             int count = Integer.parseInt(line.split(" ")[1]);
-            java.util.List<NoteData> list = new ArrayList<>();
+            java.util.List<NoteInfo> tempNotes = new ArrayList<>();
             for (int i = 0; i < count; i++) {
-                String n = in.readLine();
-                // FIXED: Split with limit 6 to keep the message and the PINNED flag separate
-                String[] d = n.split(" ", 6); 
-                list.add(new NoteData(Integer.parseInt(d[1]), Integer.parseInt(d[2]), d[3], d[4]));
+                String noteLine = in.readLine();
+                if (showInLog) log.append("  " + noteLine + "\n"); 
+                int pinnedIdx = noteLine.lastIndexOf(" PINNED=");
+                if (pinnedIdx < 0) throw new IllegalArgumentException("Missing PINNED");
+
+                String left = noteLine.substring(0, pinnedIdx);        // "NOTE x y color message..."
+                String pinnedPart = noteLine.substring(pinnedIdx + 1); // "PINNED=true/false"
+
+                // Split left into 5 pieces max so message stays intact (with spaces)
+                String[] head = left.split(" ", 5); // NOTE, x, y, color, message(with spaces)
+
+                int x = Integer.parseInt(head[1]);
+                int y = Integer.parseInt(head[2]);
+                String col = head[3];
+                String msg = (head.length >= 5) ? head[4] : "";
+
+                boolean p = pinnedPart.split("=", 2)[1].equalsIgnoreCase("true");
+
+                tempNotes.add(new NoteInfo(x, y, col, msg, p));
             }
-            boardPanel.update(list);
+
+            out.println("GET PINS");
+            String pinLine = in.readLine();
+            java.util.List<Point> tempPins = new ArrayList<>();
+            if (pinLine != null && pinLine.startsWith("OK")) {
+                int pCount = Integer.parseInt(pinLine.split(" ")[1]);
+                for (int i = 0; i < pCount; i++) {
+                    String[] pD = in.readLine().split(" ");
+                    tempPins.add(new Point(Integer.parseInt(pD[1]), Integer.parseInt(pD[2])));
+                }
+            }
+            board.updateBoard(tempNotes, tempPins);
         } catch (Exception e) {}
     }
 
-    // Inner class: Renders the bulletin board with notes
     class BoardPanel extends JPanel {
-        private java.util.List<NoteData> notes = new ArrayList<>();
-        // Constructor: Set panel size and background
-        public BoardPanel() { setPreferredSize(new Dimension(750, 500)); setBackground(Color.WHITE); }
-        // Update: Store new notes and trigger redraw
-        public void update(java.util.List<NoteData> n) { this.notes = n; repaint(); }
-        // Paint component: Draw board border and all notes with colors and text
-        protected void paintComponent(Graphics g) {
+        private java.util.List<NoteInfo> notes = new ArrayList<>();
+        private java.util.List<Point> pins = new ArrayList<>();
+        public BoardPanel() { setPreferredSize(new Dimension(850, 650)); setBackground(Color.WHITE); }
+        public void updateBoard(java.util.List<NoteInfo> n, java.util.List<Point> p) { 
+            this.notes = n; this.pins = p; repaint(); 
+        }
+        
+        @Override protected void paintComponent(Graphics g) {
             super.paintComponent(g);
-            int scale = 5; int off = 20;
-            g.drawRect(off, off, 150*scale, 100*scale);
-            for (NoteData n : notes) {
+            int S = 5; int O = 60; 
+            g.setFont(new Font("Arial", Font.PLAIN, 10));
+            g.setColor(Color.DARK_GRAY);
+            for(int i=0; i<=150; i+=10) { g.drawLine(O + i*S, O-5, O + i*S, O); g.drawString(""+i, O+i*S-5, O-10); }
+            for(int j=0; j<=100; j+=10) { g.drawLine(O-5, O + j*S, O, O + j*S); g.drawString(""+j, O-30, O+j*S+5); }
+            
+            g.setColor(Color.BLACK);
+            g.drawRect(O, O, 150 * S, 100 * S);
+
+            for (NoteInfo n : notes) {
                 g.setColor(getColor(n.c));
-                g.fillRect(off+n.x*scale, off+n.y*scale, 15*scale, 10*scale);
+                int nx = O + n.x * S; int ny = O + n.y * S;
+                g.fillRect(nx, ny, 15 * S, 10 * S);
                 g.setColor(Color.BLACK);
-                g.drawRect(off+n.x*scale, off+n.y*scale, 15*scale, 10*scale);
-                // The message will now render with spaces
-                g.drawString(n.m, off+n.x*scale + 5, off+n.y*scale + 20);
+                g.drawRect(nx, ny, 15 * S, 10 * S);
+                g.drawString(n.m, nx + 5, ny + 25);
+            }
+            for (Point p : pins) {
+                g.setColor(Color.RED);
+                g.fillOval(O + p.x * S - 4, O + p.y * S - 4, 8, 8);
+                g.setColor(Color.BLACK);
+                g.drawOval(O + p.x * S - 4, O + p.y * S - 4, 8, 8);
             }
         }
-        // Get color: Convert color name string to Color object
         private Color getColor(String c) {
-            if (c.equals("red")) return Color.RED; if (c.equals("blue")) return Color.BLUE;
-            if (c.equals("green")) return Color.GREEN; if (c.equals("yellow")) return Color.YELLOW;
-            return Color.WHITE;
+            switch(c.toLowerCase()){
+                case "red": return Color.RED; case "blue": return Color.BLUE;
+                case "yellow": return Color.YELLOW; case "green": return Color.GREEN;
+                default: return Color.WHITE;
+            }
         }
     }
-    record NoteData(int x, int y, String c, String m) {}
+    record NoteInfo(int x, int y, String c, String m, boolean p) {}
     public static void main(String[] args) { new Client(); }
 }
