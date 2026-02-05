@@ -9,6 +9,7 @@ public class Server {
     private final List<String> validColors = Arrays.asList("red", "blue", "green", "yellow", "white");
     private String noteKey(Note n) { return n.x + "," + n.y; }
 
+    // Start server: Listen for incoming client connections on specified port
     public void start(int port) throws IOException {
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             System.out.println("Server active on port " + port);
@@ -16,6 +17,7 @@ public class Server {
         }
     }
 
+    // Inner class: Handle individual client connections in separate thread
     private class ClientHandler extends Thread {
         private Socket socket;
         private PrintWriter out;
@@ -23,6 +25,7 @@ public class Server {
 
         public ClientHandler(Socket s) { this.socket = s; }
 
+        // Run: Initialize streams, send board info, and process client commands until disconnect
         public void run() {
             try {
                 out = new PrintWriter(socket.getOutputStream(), true);
@@ -41,6 +44,7 @@ public class Server {
             } catch (Exception e) {} finally { try { socket.close(); } catch (IOException e) {} }
         }
 
+        // Process command: Parse request and execute appropriate handler (POST, GET, PIN, UNPIN, CLEAR)
         private void processCommand(String raw) {
             String[] args = raw.trim().split("\\s+");
             if (args.length == 0) return;
@@ -59,6 +63,7 @@ public class Server {
             }
         }
 
+        // Handle POST: Add new note with validation (bounds check, color check, no overlap)
         private void handlePost(String[] args) {
             int x = Integer.parseInt(args[1]), y = Integer.parseInt(args[2]);
             String color = args[3].toLowerCase();
@@ -74,6 +79,7 @@ public class Server {
             out.println("OK NOTE_POSTED");
         }
 
+        // Handle GET: Return notes matching optional filters (color, contains coordinate, refers to text)
         private void handleGet(String[] args) {
             if (args.length > 1 && args[1].equalsIgnoreCase("PINS")) {
                 out.println("OK " + pins.size());
@@ -139,6 +145,7 @@ public class Server {
             for (Note n : res) out.println(String.format("NOTE %d %d %s %s PINNED=%b", n.x, n.y, n.color, n.msg, isNotePinned(n)));
         }
 
+        // Handle PIN: Place pin at coordinate (must be inside note, not on edge) to protect from SHAKE
         private void handlePin(String[] args) {
             int px = Integer.parseInt(args[1]), py = Integer.parseInt(args[2]);
 
@@ -151,15 +158,22 @@ public class Server {
             }
             Pin pin = new Pin(px, py);
             boolean hit = false;
+            boolean onEdge = false;
 
             for (Note n : notes) {
                 if (px >= n.x && px <= n.x + nW && py >= n.y && py <= n.y + nH) {
-                    pin.appliesTo.add(noteKey(n)); // only notes that exist RIGHT NOW
-                    hit = true;
+                    // Check if pin is on the edge of the note
+                    if (px == n.x || px == n.x + nW || py == n.y || py == n.y + nH) {
+                        onEdge = true;
+                    } else {
+                        hit = true;
+                    }
                 }
             }
 
-            if (!hit) {
+            if (onEdge) {
+                out.println("ERROR PIN_ON_EDGE - Pin cannot be placed on the edge of a note");
+            } else if (!hit) {
                 out.println("ERROR NO_NOTE_AT_COORDINATE - No note contains this given point");
             } else {
                 pins.add(pin);
@@ -167,16 +181,18 @@ public class Server {
             }
         }
 
+        // Handle UNPIN: Remove pin from specified coordinate
         private void handleUnpin(String[] args) {
             int px = Integer.parseInt(args[1]), py = Integer.parseInt(args[2]);
             boolean removed = pins.removeIf(p -> p.x == px && p.y == py);
             out.println(removed ? "OK" : "ERROR PIN_NOT_FOUND - No pin exists at the given coordinates");
         }
 
+        // Is note pinned: Check if pin exists at (x-1, y-1) relative to note
         private boolean isNotePinned(Note n) {
-            String k = noteKey(n);
+            // Pin must be at (x-1, y-1) to pin the note
             for (Pin p : pins) {
-                if (p.appliesTo.contains(k)) return true;
+                if (p.x == n.x - 1 && p.y == n.y - 1) return true;
             }
             return false;
         }
