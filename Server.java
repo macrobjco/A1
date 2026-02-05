@@ -166,6 +166,7 @@ public class Server {
                     if (px == n.x || px == n.x + nW || py == n.y || py == n.y + nH) {
                         onEdge = true;
                     } else {
+                        pin.appliesTo.add(noteKey(n));  
                         hit = true;
                     }
                 }
@@ -190,9 +191,9 @@ public class Server {
 
         // Is note pinned: Check if pin exists at (x-1, y-1) relative to note
         private boolean isNotePinned(Note n) {
-            // Pin must be at (x-1, y-1) to pin the note
+            String k = noteKey(n);
             for (Pin p : pins) {
-                if (p.x == n.x - 1 && p.y == n.y - 1) return true;
+                if (p.appliesTo.contains(k)) return true;
             }
             return false;
         }
